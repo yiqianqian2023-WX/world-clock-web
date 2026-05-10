@@ -2,10 +2,11 @@
   "name": "全球工作时间 - World Business Hours",
   "short_name": "World Clock",
   "description": "实时查看全球各国首都的工作时间",
-  "start_url": "worldclock.html",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#f5efe8",
-  "theme_color": "#a8b5a0",
+  "background_color": "#0f0a1a",
+  "theme_color": "#0f0a1a",
   "icons": [
     {
       "src": "icon.svg",

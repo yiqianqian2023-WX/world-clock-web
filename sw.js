@@ -1,7 +1,7 @@
 // Service Worker for offline caching
 const CACHE = 'world-clock-v1';
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(['worldclock.html', 'manifest.json', 'icon.svg'])));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/index.html', '/manifest.json', '/icon.svg'])));
   self.skipWaiting();
 });
 self.addEventListener('activate', e => e.waitUntil(clients.claim()));
