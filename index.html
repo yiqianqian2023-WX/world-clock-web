@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>全球工作时间 - World Clock</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f0a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="World Clock">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  /* ============================================================
+     ROOT VARIABLES
+     ============================================================ */
+  :root {
+    --glass: rgba(255, 255, 255, 0.06);
+    --glass-border: rgba(255, 255, 255, 0.10);
+    --glass-hover: rgba(255, 255, 255, 0.10);
+    --glass-strong: rgba(255, 255, 255, 0.10);
+    --text: #f0edf6;
+    --secondary: rgba(240, 237, 246, 0.65);
+    --muted: rgba(240, 237, 246, 0.40);
+    --accent: #a78bfa;
+    --accent-glow: rgba(167, 139, 250, 0.35);
+    --accent-bg: rgba(167, 139, 250, 0.12);
+    --green: #34d399;
+    --green-glow: rgba(52, 211, 153, 0.30);
+    --orange: #fb923c;
+    --orange-glow: rgba(251, 146, 60, 0.30);
+    --gray: rgba(240, 237, 246, 0.30);
+    --favorite: #fbbf24;
+    --favorite-glow: rgba(251, 191, 36, 0.4);
+    --radius: 20px;
+    --radius-sm: 14px;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    min-height: 100vh;
+    color: var(--text);
+    padding: 22px 20px 34px;
+    position: relative;
+    overflow-x: hidden;
+    background: #0f0a1a;
+  }
+
+  /* ---- ANIMATED GRADIENT BACKGROUND ---- */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: -50%;
+    z-index: -2;
+    background:
+      radial-gradient(ellipse 80% 60% at 15% 20%, rgba(139, 92, 246, 0.18) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 85% 30%, rgba(59, 130, 246, 0.12) 0%, transparent 55%),
+      radial-gradient(ellipse 70% 60% at 50% 80%, rgba(236, 72, 153, 0.10) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 50% at 30% 70%, rgba(52, 211, 153, 0.06) 0%, transparent 50%);
+    animation: gradientShift 20s ease-in-out infinite alternate;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: -50%;
+    z-index: -1;
+    background:
+      radial-gradient(ellipse 60% 50% at 80% 15%, rgba(167, 139, 250, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse 50% 40% at 20% 60%, rgba(96, 165, 250, 0.06) 0%, transparent 50%);
+    animation: gradientShift2 25s ease-in-out infinite alternate;
+  }
+
+  @keyframes gradientShift {
+    0%   { transform: translate(0, 0) rotate(0deg); }
+    50%  { transform: translate(5%, 3%) rotate(3deg); }
+    100% { transform: translate(-3%, -2%) rotate(-2deg); }
+  }
+
+  @keyframes gradientShift2 {
+    0%   { transform: translate(0, 0) rotate(0deg); }
+    50%  { transform: translate(-4%, 2%) rotate(-3deg); }
+    100% { transform: translate(3%, -3%) rotate(2deg); }
+  }
+
+  /* ---- NOISE OVERLAY ---- */
+  .noise {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    opacity: 0.035;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px 256px;
+  }
+
+  .container { max-width: 1200px; margin: 0 auto; position: relative; }
+
+  /* ============================================================
+     GLASS CARD MIXIN
+     ============================================================ */
+  .glass {
+    background: var(--glass);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .glass:hover {
+    background: var(--glass-hover);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  /* ============================================================
+     HEADER
+     ============================================================ */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+    padding: 18px 24px;
+    background: var(--glass);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    animation: fadeDown 0.6s ease-out;
+  }
+  .header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0;
+    background: linear-gradient(135deg, #f0edf6 0%, #a78bfa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .header p {
+    font-size: 14px;
+    color: var(--secondary);
+  }
+
+  /* ============================================================
+     LOCAL TIME BAR
+     ============================================================ */
+  .local-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin: 0 auto 16px;
+    padding: 18px 34px;
+    max-width: 680px;
+    background: linear-gradient(135deg,
+      rgba(167, 139, 250, 0.10) 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(167, 139, 250, 0.06) 100%
+    );
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    border-radius: var(--radius);
+    border: 1px solid var(--glass-border);
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    animation: fadeDown 0.6s ease-out 0.1s both;
+    position: relative;
+    overflow: hidden;
+  }
+  .local-bar::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: conic-gradient(from 0deg at 50% 50%,
+      transparent 0deg,
+      rgba(167, 139, 250, 0.03) 60deg,
+      transparent 120deg,
+      rgba(96, 165, 250, 0.03) 180deg,
+      transparent 240deg,
+      rgba(167, 139, 250, 0.03) 300deg,
+      transparent 360deg
+    );
+    animation: shimmer 8s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes shimmer {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .local-bar .loc-icon {
+    font-size: 20px;
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-bg);
+    border-radius: var(--radius-sm);
+    position: relative;
+    flex-shrink: 0;
+  }
+  .local-bar .loc-info { text-align: left; position: relative; z-index: 1; }
+  .local-bar .loc-label {
+    font-size: 11px;
+    color: var(--secondary);
+    letter-spacing: 1px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .local-bar .loc-time {
+    font-size: 36px;
+    font-weight: 280;
+    letter-spacing: 5px;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 50%, #818cf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+    text-shadow: 0 0 40px rgba(167, 139, 250, 0.3);
+  }
+  .local-bar .loc-date {
+    font-size: 13px;
+    color: var(--secondary);
+    margin-left: 4px;
+    padding-top: 2px;
+    position: relative; z-index: 1;
+  }
+  .local-bar .loc-divider {
+    width: 1px; height: 40px;
+    background: var(--glass-border);
+    flex-shrink: 0;
+  }
+
+  /* ============================================================
+     STATS RIBBON
+     ============================================================ */
+  .ribbon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    margin: 0 auto 16px;
+    padding: 14px 20px;
+    max-width: 820px;
+    background: var(--glass);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
+    animation: fadeDown 0.6s ease-out 0.2s both;
+  }
+  .ribbon-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--secondary);
+  }
+  .ribbon-item .num {
+    font-size: 20px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    min-width: 28px;
+    text-align: center;
+    transition: all 0.3s;
+  }
+  .ribbon-item .num.green {
+    color: var(--green);
+    text-shadow: 0 0 20px var(--green-glow);
+  }
+  .ribbon-item .num.orange {
+    color: var(--orange);
+    text-shadow: 0 0 20px var(--orange-glow);
+  }
+  .ribbon-item .num.gray { color: var(--gray); }
+
+  /* ============================================================
+     TOOLBAR
+     ============================================================ */
+  .toolbar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 14px;
+    background: var(--glass);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    animation: fadeDown 0.6s ease-out 0.3s both;
+  }
+  .search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+    max-width: 400px;
+  }
+  .search-wrap svg {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 17px;
+    height: 17px;
+    color: var(--muted);
+    pointer-events: none;
+  }
+  .search-input {
+    width: 100%;
+    padding: 11px 16px 11px 42px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    background: var(--glass-strong);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    font-size: 14px;
+    color: var(--text);
+    outline: none;
+    transition: all 0.3s;
+  }
+  .search-input::placeholder { color: var(--muted); }
+  .search-input:focus {
+    box-shadow: 0 0 0 3px var(--accent-glow), 0 0 20px var(--accent-glow);
+    border-color: rgba(167, 139, 250, 0.3);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .filters {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .filter-btn {
+    padding: 7px 16px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+  .filter-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--secondary);
+  }
+  .filter-btn.active {
+    background: var(--accent-bg);
+    border-color: rgba(167, 139, 250, 0.2);
+    color: var(--accent);
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+
+  /* ============================================================
+     CITY GRID
+     ============================================================ */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+  }
+
+  .city-card {
+    position: relative;
+    padding: 22px 18px 18px;
+    border-radius: var(--radius);
+    background: var(--glass);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    overflow: hidden;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--glass-border);
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    animation: cardEnter 0.5s ease-out both;
+    cursor: default;
+  }
+
+  /* Staggered animation delay via JS */
+  .city-card:nth-child(1)  { animation-delay: calc(0.05s * 1); }
+  .city-card:nth-child(2)  { animation-delay: calc(0.05s * 2); }
+  .city-card:nth-child(3)  { animation-delay: calc(0.05s * 3); }
+  .city-card:nth-child(4)  { animation-delay: calc(0.05s * 4); }
+  .city-card:nth-child(5)  { animation-delay: calc(0.05s * 5); }
+  .city-card:nth-child(6)  { animation-delay: calc(0.05s * 6); }
+  .city-card:nth-child(7)  { animation-delay: calc(0.05s * 7); }
+  .city-card:nth-child(8)  { animation-delay: calc(0.05s * 8); }
+  .city-card:nth-child(9)  { animation-delay: calc(0.05s * 9); }
+  .city-card:nth-child(10) { animation-delay: calc(0.05s * 10); }
+  .city-card:nth-child(11) { animation-delay: calc(0.05s * 11); }
+  .city-card:nth-child(12) { animation-delay: calc(0.05s * 12); }
+  .city-card:nth-child(13) { animation-delay: calc(0.05s * 13); }
+  .city-card:nth-child(14) { animation-delay: calc(0.05s * 14); }
+  .city-card:nth-child(15) { animation-delay: calc(0.05s * 15); }
+  .city-card:nth-child(16) { animation-delay: calc(0.05s * 16); }
+  .city-card:nth-child(17) { animation-delay: calc(0.05s * 17); }
+  .city-card:nth-child(18) { animation-delay: calc(0.05s * 18); }
+  .city-card:nth-child(19) { animation-delay: calc(0.05s * 19); }
+  .city-card:nth-child(20) { animation-delay: calc(0.05s * 20); }
+  .city-card:nth-child(21) { animation-delay: calc(0.05s * 21); }
+  .city-card:nth-child(22) { animation-delay: calc(0.05s * 22); }
+  .city-card:nth-child(23) { animation-delay: calc(0.05s * 23); }
+  .city-card:nth-child(24) { animation-delay: calc(0.05s * 24); }
+
+  @keyframes cardEnter {
+    0% {
+      opacity: 0;
+      transform: translateY(20px) scale(0.96);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .city-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -50%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.03) 50%,
+      transparent 100%
+    );
+    transform: skewX(-15deg);
+    transition: transform 0.6s;
+    pointer-events: none;
+  }
+
+  .city-card:hover::before {
+    transform: skewX(-15deg) translateX(100%);
+  }
+
+  .city-card:hover {
+    background: rgba(255, 255, 255, 0.09);
+    transform: translateY(-4px);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow:
+      0 12px 40px rgba(0, 0, 0, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  }
+
+  .city-card .top-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    transition: all 0.5s;
+  }
+  .city-card .top-bar.day {
+    background: linear-gradient(90deg, rgba(52, 211, 153, 0.4), rgba(96, 165, 250, 0.4));
+    box-shadow: 0 0 12px rgba(52, 211, 153, 0.2);
+  }
+  .city-card .top-bar.night {
+    background: linear-gradient(90deg, rgba(148, 163, 184, 0.3), rgba(100, 116, 139, 0.3));
+  }
+  .city-card .top-bar.twilight {
+    background: linear-gradient(90deg, rgba(251, 146, 60, 0.4), rgba(196, 181, 253, 0.4));
+    box-shadow: 0 0 12px rgba(251, 146, 60, 0.2);
+  }
+
+  .favorite-btn {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 28px;
+    transition: all 0.3s;
+    z-index: 2;
+  }
+  .favorite-btn.active {
+    color: var(--favorite);
+    background: rgba(251, 191, 36, 0.15);
+    box-shadow: 0 0 16px var(--favorite-glow);
+  }
+  .favorite-btn:hover {
+    transform: scale(1.15);
+  }
+
+  .city-card .work-badge {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    letter-spacing: 0.3px;
+    transition: all 0.3s;
+    z-index: 1;
+  }
+  .city-card .work-badge.open {
+    background: rgba(52, 211, 153, 0.10);
+    color: var(--green);
+    border: 1px solid rgba(52, 211, 153, 0.15);
+    box-shadow: 0 0 16px var(--green-glow);
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+  .city-card .work-badge.closed {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--gray);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .city-card .work-badge.lunch {
+    background: rgba(251, 146, 60, 0.10);
+    color: var(--orange);
+    border: 1px solid rgba(251, 146, 60, 0.15);
+    box-shadow: 0 0 16px var(--orange-glow);
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 8px var(--green-glow); }
+    50% { box-shadow: 0 0 20px var(--green-glow); }
+  }
+
+  .city-card .tz-label {
+    position: absolute;
+    top: 14px;
+    left: 52px;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0.3px;
+  }
+
+  .city-card .city-info {
+    margin-top: 32px;
+    margin-bottom: 8px;
+  }
+  .city-card .city-name {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .city-card .city-name .en {
+    font-weight: 400;
+    color: var(--secondary);
+    font-size: 13px;
+    margin-left: 6px;
+  }
+  .city-card .country-name {
+    font-size: 12px;
+    color: var(--secondary);
+    margin-top: 1px;
+  }
+  .city-card .country-name .en {
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  .city-card .clock-time {
+    font-size: 32px;
+    font-weight: 280;
+    letter-spacing: 3px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    line-height: 1.1;
+    margin-bottom: 2px;
+    text-shadow: 0 0 30px rgba(240, 237, 246, 0.08);
+    transition: all 0.3s;
+  }
+
+  .city-card .clock-date {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.3px;
+  }
+
+  .city-card .diff-tag {
+    position: absolute;
+    bottom: 18px;
+    right: 18px;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 10px;
+    background: var(--accent-bg);
+    color: var(--secondary);
+    font-weight: 500;
+    backdrop-filter: blur(4px);
+  }
+  .city-card .diff-tag .strong {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .city-card.hidden { display: none; }
+
+  .city-card.highlight {
+    border-color: rgba(52, 211, 153, 0.15);
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.2),
+      0 0 0 1px rgba(52, 211, 153, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .city-card.highlight:hover {
+    border-color: rgba(52, 211, 153, 0.25);
+    box-shadow:
+      0 12px 40px rgba(0, 0, 0, 0.35),
+      0 0 0 1px rgba(52, 211, 153, 0.10),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  }
+
+  /* ---- EMPTY STATE ---- */
+  .empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--secondary);
+    font-size: 15px;
+  }
+
+  /* ---- FOOTER ---- */
+  .footer {
+    text-align: center;
+    margin-top: 32px;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    animation: fadeDown 0.6s ease-out 0.4s both;
+  }
+
+  /* ============================================================
+     KEYFRAMES
+     ============================================================ */
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ============================================================
+     RESPONSIVE
+     ============================================================ */
+  @media (max-width: 500px) {
+    body { padding: 14px 10px 24px; }
+    .header { display: block; text-align: left; padding: 14px 16px; }
+    .header h1 { font-size: 22px; }
+    .local-bar { padding: 14px 18px; gap: 10px; flex-wrap: wrap; }
+    .local-bar .loc-time { font-size: 28px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 10px; }
+    .toolbar { padding: 10px; }
+    .city-card { padding: 16px 12px 14px; min-height: 142px; }
+    .city-card .tz-label { left: 48px; }
+    .favorite-btn { left: 12px; }
+    .city-card .city-name { font-size: 14px; }
+    .city-card .city-name .en { font-size: 11px; }
+    .city-card .clock-time { font-size: 26px; }
+    .city-card .work-badge { font-size: 9px; padding: 3px 7px; }
+    .ribbon { gap: 14px; padding: 10px 16px; }
+    .ribbon-item .num { font-size: 17px; min-width: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="noise"></div>
+
+<div class="container">
+
+  <div class="header">
+    <h1>🌍 全球工作时间</h1>
+    <p>World Business Hours · 实时查看世界各地现在是否在工作时间</p>
+  </div>
+
+  <!-- My Local Time -->
+  <div class="local-bar" id="localBar">
+    <div class="loc-icon">📍</div>
+    <div class="loc-info">
+      <div class="loc-label">My Time / 我的时间</div>
+      <div class="loc-time" id="localTime">--:--:--</div>
+    </div>
+    <div class="loc-divider"></div>
+    <div class="loc-date" id="localDate"></div>
+  </div>
+
+  <!-- Stats Ribbon -->
+  <div class="ribbon">
+    <div class="ribbon-item">
+      🟢 Working / 工作中
+      <span class="num green" id="statWorking">0</span>
+    </div>
+    <div class="ribbon-item">
+      🟠 Lunch / 午休中
+      <span class="num orange" id="statLunch">0</span>
+    </div>
+    <div class="ribbon-item">
+      ⚫ Off / 已下班
+      <span class="num gray" id="statOff">0</span>
+    </div>
+    <div class="ribbon-item" style="border-left:1px solid rgba(255,255,255,0.06);padding-left:20px">
+      🌏 <span class="num" id="statTotal" style="color:#a78bfa">0</span>
+      <span style="font-size:11px;color:var(--muted)">countries / 个国家</span>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <circle cx="11" cy="11" r="7.5"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input class="search-input" id="searchInput" type="text" placeholder="Search 搜索国家或首都…" autocomplete="off">
+    </div>
+    <div class="filters" id="filterRow">
+      <button class="filter-btn active" data-filter="all">🌏 All 全部</button>
+      <button class="filter-btn" data-filter="favorites">★ Favorites 收藏</button>
+      <button class="filter-btn" data-filter="asia">🌏 Asia 亚洲</button>
+      <button class="filter-btn" data-filter="europe">🌍 Europe 欧洲</button>
+      <button class="filter-btn" data-filter="na">🌎 N.America 北美</button>
+      <button class="filter-btn" data-filter="sa">🌎 S.America 南美</button>
+      <button class="filter-btn" data-filter="africa">🌍 Africa 非洲</button>
+      <button class="filter-btn" data-filter="oceania">🌏 Oceania 大洋洲</button>
+    </div>
+  </div>
+
+  <!-- Grid -->
+  <div class="grid" id="cityGrid"></div>
+
+  <div class="footer">⏱ Auto-refresh every second · Business hours Mon–Sat 09:00–12:00 · 14:00–18:00 local</div>
+</div>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const capitals = [
+  // ── Asia / 亚洲 ──
+  { country: '中国', countryEn: 'China', capital: '北京', capitalEn: 'Beijing', tz: 'Asia/Shanghai', continent: 'asia' },
+  { country: '日本', countryEn: 'Japan', capital: '东京', capitalEn: 'Tokyo', tz: 'Asia/Tokyo', continent: 'asia' },
+  { country: '韩国', countryEn: 'South Korea', capital: '首尔', capitalEn: 'Seoul', tz: 'Asia/Seoul', continent: 'asia' },
+  { country: '朝鲜', countryEn: 'North Korea', capital: '平壤', capitalEn: 'Pyongyang', tz: 'Asia/Pyongyang', continent: 'asia' },
+  { country: '蒙古', countryEn: 'Mongolia', capital: '乌兰巴托', capitalEn: 'Ulaanbaatar', tz: 'Asia/Ulaanbaatar', continent: 'asia' },
+  { country: '印度', countryEn: 'India', capital: '新德里', capitalEn: 'New Delhi', tz: 'Asia/Kolkata', continent: 'asia' },
+  { country: '巴基斯坦', countryEn: 'Pakistan', capital: '伊斯兰堡', capitalEn: 'Islamabad', tz: 'Asia/Karachi', continent: 'asia' },
+  { country: '孟加拉国', countryEn: 'Bangladesh', capital: '达卡', capitalEn: 'Dhaka', tz: 'Asia/Dhaka', continent: 'asia' },
+  { country: '斯里兰卡', countryEn: 'Sri Lanka', capital: '科伦坡', capitalEn: 'Colombo', tz: 'Asia/Colombo', continent: 'asia' },
+  { country: '尼泊尔', countryEn: 'Nepal', capital: '加德满都', capitalEn: 'Kathmandu', tz: 'Asia/Kathmandu', continent: 'asia' },
+  { country: '不丹', countryEn: 'Bhutan', capital: '廷布', capitalEn: 'Thimphu', tz: 'Asia/Thimphu', continent: 'asia' },
+  { country: '缅甸', countryEn: 'Myanmar', capital: '内比都', capitalEn: 'Naypyidaw', tz: 'Asia/Yangon', continent: 'asia' },
+  { country: '泰国', countryEn: 'Thailand', capital: '曼谷', capitalEn: 'Bangkok', tz: 'Asia/Bangkok', continent: 'asia' },
+  { country: '老挝', countryEn: 'Laos', capital: '万象', capitalEn: 'Vientiane', tz: 'Asia/Vientiane', continent: 'asia' },
+  { country: '柬埔寨', countryEn: 'Cambodia', capital: '金边', capitalEn: 'Phnom Penh', tz: 'Asia/Phnom_Penh', continent: 'asia' },
+  { country: '越南', countryEn: 'Vietnam', capital: '河内', capitalEn: 'Hanoi', tz: 'Asia/Ho_Chi_Minh', continent: 'asia' },
+  { country: '马来西亚', countryEn: 'Malaysia', capital: '吉隆坡', capitalEn: 'Kuala Lumpur', tz: 'Asia/Kuala_Lumpur', continent: 'asia' },
+  { country: '新加坡', countryEn: 'Singapore', capital: '新加坡', capitalEn: 'Singapore', tz: 'Asia/Singapore', continent: 'asia' },
+  { country: '印度尼西亚', countryEn: 'Indonesia', capital: '雅加达', capitalEn: 'Jakarta', tz: 'Asia/Jakarta', continent: 'asia' },
+  { country: '菲律宾', countryEn: 'Philippines', capital: '马尼拉', capitalEn: 'Manila', tz: 'Asia/Manila', continent: 'asia' },
+  { country: '东帝汶', countryEn: 'Timor-Leste', capital: '帝力', capitalEn: 'Dili', tz: 'Asia/Dili', continent: 'asia' },
+  { country: '文莱', countryEn: 'Brunei', capital: '斯里巴加湾市', capitalEn: 'Bandar Seri Begawan', tz: 'Asia/Brunei', continent: 'asia' },
+  { country: '沙特阿拉伯', countryEn: 'Saudi Arabia', capital: '利雅得', capitalEn: 'Riyadh', tz: 'Asia/Riyadh', continent: 'asia' },
+  { country: '阿联酋', countryEn: 'UAE', capital: '阿布扎比', capitalEn: 'Abu Dhabi', tz: 'Asia/Dubai', continent: 'asia' },
+  { country: '卡塔尔', countryEn: 'Qatar', capital: '多哈', capitalEn: 'Doha', tz: 'Asia/Qatar', continent: 'asia' },
+  { country: '科威特', countryEn: 'Kuwait', capital: '科威特城', capitalEn: 'Kuwait City', tz: 'Asia/Kuwait', continent: 'asia' },
+  { country: '阿曼', countryEn: 'Oman', capital: '马斯喀特', capitalEn: 'Muscat', tz: 'Asia/Muscat', continent: 'asia' },
+  { country: '巴林', countryEn: 'Bahrain', capital: '麦纳麦', capitalEn: 'Manama', tz: 'Asia/Bahrain', continent: 'asia' },
+  { country: '也门', countryEn: 'Yemen', capital: '萨那', capitalEn: "Sana'a", tz: 'Asia/Aden', continent: 'asia' },
+  { country: '伊拉克', countryEn: 'Iraq', capital: '巴格达', capitalEn: 'Baghdad', tz: 'Asia/Baghdad', continent: 'asia' },
+  { country: '伊朗', countryEn: 'Iran', capital: '德黑兰', capitalEn: 'Tehran', tz: 'Asia/Tehran', continent: 'asia' },
+  { country: '叙利亚', countryEn: 'Syria', capital: '大马士革', capitalEn: 'Damascus', tz: 'Asia/Damascus', continent: 'asia' },
+  { country: '约旦', countryEn: 'Jordan', capital: '安曼', capitalEn: 'Amman', tz: 'Asia/Amman', continent: 'asia' },
+  { country: '黎巴嫩', countryEn: 'Lebanon', capital: '贝鲁特', capitalEn: 'Beirut', tz: 'Asia/Beirut', continent: 'asia' },
+  { country: '以色列', countryEn: 'Israel', capital: '耶路撒冷', capitalEn: 'Jerusalem', tz: 'Asia/Jerusalem', continent: 'asia' },
+  { country: '巴勒斯坦', countryEn: 'Palestine', capital: '拉马拉', capitalEn: 'Ramallah', tz: 'Asia/Hebron', continent: 'asia' },
+  { country: '土耳其', countryEn: 'Turkey', capital: '安卡拉', capitalEn: 'Ankara', tz: 'Europe/Istanbul', continent: 'asia' },
+  { country: '塞浦路斯', countryEn: 'Cyprus', capital: '尼科西亚', capitalEn: 'Nicosia', tz: 'Asia/Nicosia', continent: 'asia' },
+  { country: '阿富汗', countryEn: 'Afghanistan', capital: '喀布尔', capitalEn: 'Kabul', tz: 'Asia/Kabul', continent: 'asia' },
+  { country: '乌兹别克斯坦', countryEn: 'Uzbekistan', capital: '塔什干', capitalEn: 'Tashkent', tz: 'Asia/Tashkent', continent: 'asia' },
+  { country: '哈萨克斯坦', countryEn: 'Kazakhstan', capital: '努尔苏丹', capitalEn: 'Nur-Sultan', tz: 'Asia/Almaty', continent: 'asia' },
+  { country: '吉尔吉斯斯坦', countryEn: 'Kyrgyzstan', capital: '比什凯克', capitalEn: 'Bishkek', tz: 'Asia/Bishkek', continent: 'asia' },
+  { country: '塔吉克斯坦', countryEn: 'Tajikistan', capital: '杜尚别', capitalEn: 'Dushanbe', tz: 'Asia/Dushanbe', continent: 'asia' },
+  { country: '土库曼斯坦', countryEn: 'Turkmenistan', capital: '阿什哈巴德', capitalEn: 'Ashgabat', tz: 'Asia/Ashgabat', continent: 'asia' },
+  { country: '阿塞拜疆', countryEn: 'Azerbaijan', capital: '巴库', capitalEn: 'Baku', tz: 'Asia/Baku', continent: 'asia' },
+  { country: '亚美尼亚', countryEn: 'Armenia', capital: '埃里温', capitalEn: 'Yerevan', tz: 'Asia/Yerevan', continent: 'asia' },
+  { country: '格鲁吉亚', countryEn: 'Georgia', capital: '第比利斯', capitalEn: 'Tbilisi', tz: 'Asia/Tbilisi', continent: 'asia' },
+  { country: '马尔代夫', countryEn: 'Maldives', capital: '马累', capitalEn: 'Male', tz: 'Indian/Maldives', continent: 'asia' },
+
+  // ── Europe / 欧洲 ──
+  { country: '英国', countryEn: 'United Kingdom', capital: '伦敦', capitalEn: 'London', tz: 'Europe/London', continent: 'europe' },
+  { country: '法国', countryEn: 'France', capital: '巴黎', capitalEn: 'Paris', tz: 'Europe/Paris', continent: 'europe' },
+  { country: '德国', countryEn: 'Germany', capital: '柏林', capitalEn: 'Berlin', tz: 'Europe/Berlin', continent: 'europe' },
+  { country: '意大利', countryEn: 'Italy', capital: '罗马', capitalEn: 'Rome', tz: 'Europe/Rome', continent: 'europe' },
+  { country: '西班牙', countryEn: 'Spain', capital: '马德里', capitalEn: 'Madrid', tz: 'Europe/Madrid', continent: 'europe' },
+  { country: '葡萄牙', countryEn: 'Portugal', capital: '里斯本', capitalEn: 'Lisbon', tz: 'Europe/Lisbon', continent: 'europe' },
+  { country: '荷兰', countryEn: 'Netherlands', capital: '阿姆斯特丹', capitalEn: 'Amsterdam', tz: 'Europe/Amsterdam', continent: 'europe' },
+  { country: '比利时', countryEn: 'Belgium', capital: '布鲁塞尔', capitalEn: 'Brussels', tz: 'Europe/Brussels', continent: 'europe' },
+  { country: '瑞士', countryEn: 'Switzerland', capital: '伯尔尼', capitalEn: 'Bern', tz: 'Europe/Zurich', continent: 'europe' },
+  { country: '奥地利', countryEn: 'Austria', capital: '维也纳', capitalEn: 'Vienna', tz: 'Europe/Vienna', continent: 'europe' },
+  { country: '瑞典', countryEn: 'Sweden', capital: '斯德哥尔摩', capitalEn: 'Stockholm', tz: 'Europe/Stockholm', continent: 'europe' },
+  { country: '挪威', countryEn: 'Norway', capital: '奥斯陆', capitalEn: 'Oslo', tz: 'Europe/Oslo', continent: 'europe' },
+  { country: '丹麦', countryEn: 'Denmark', capital: '哥本哈根', capitalEn: 'Copenhagen', tz: 'Europe/Copenhagen', continent: 'europe' },
+  { country: '芬兰', countryEn: 'Finland', capital: '赫尔辛基', capitalEn: 'Helsinki', tz: 'Europe/Helsinki', continent: 'europe' },
+  { country: '冰岛', countryEn: 'Iceland', capital: '雷克雅未克', capitalEn: 'Reykjavik', tz: 'Atlantic/Reykjavik', continent: 'europe' },
+  { country: '爱尔兰', countryEn: 'Ireland', capital: '都柏林', capitalEn: 'Dublin', tz: 'Europe/Dublin', continent: 'europe' },
+  { country: '波兰', countryEn: 'Poland', capital: '华沙', capitalEn: 'Warsaw', tz: 'Europe/Warsaw', continent: 'europe' },
+  { country: '捷克', countryEn: 'Czech Republic', capital: '布拉格', capitalEn: 'Prague', tz: 'Europe/Prague', continent: 'europe' },
+  { country: '斯洛伐克', countryEn: 'Slovakia', capital: '布拉迪斯拉发', capitalEn: 'Bratislava', tz: 'Europe/Bratislava', continent: 'europe' },
+  { country: '匈牙利', countryEn: 'Hungary', capital: '布达佩斯', capitalEn: 'Budapest', tz: 'Europe/Budapest', continent: 'europe' },
+  { country: '罗马尼亚', countryEn: 'Romania', capital: '布加勒斯特', capitalEn: 'Bucharest', tz: 'Europe/Bucharest', continent: 'europe' },
+  { country: '保加利亚', countryEn: 'Bulgaria', capital: '索菲亚', capitalEn: 'Sofia', tz: 'Europe/Sofia', continent: 'europe' },
+  { country: '塞尔维亚', countryEn: 'Serbia', capital: '贝尔格莱德', capitalEn: 'Belgrade', tz: 'Europe/Belgrade', continent: 'europe' },
+  { country: '克罗地亚', countryEn: 'Croatia', capital: '萨格勒布', capitalEn: 'Zagreb', tz: 'Europe/Zagreb', continent: 'europe' },
+  { country: '希腊', countryEn: 'Greece', capital: '雅典', capitalEn: 'Athens', tz: 'Europe/Athens', continent: 'europe' },
+  { country: '乌克兰', countryEn: 'Ukraine', capital: '基辅', capitalEn: 'Kyiv', tz: 'Europe/Kyiv', continent: 'europe' },
+  { country: '白俄罗斯', countryEn: 'Belarus', capital: '明斯克', capitalEn: 'Minsk', tz: 'Europe/Minsk', continent: 'europe' },
+  { country: '立陶宛', countryEn: 'Lithuania', capital: '维尔纽斯', capitalEn: 'Vilnius', tz: 'Europe/Vilnius', continent: 'europe' },
+  { country: '拉脱维亚', countryEn: 'Latvia', capital: '里加', capitalEn: 'Riga', tz: 'Europe/Riga', continent: 'europe' },
+  { country: '爱沙尼亚', countryEn: 'Estonia', capital: '塔林', capitalEn: 'Tallinn', tz: 'Europe/Tallinn', continent: 'europe' },
+  { country: '摩尔多瓦', countryEn: 'Moldova', capital: '基希讷乌', capitalEn: 'Chișinău', tz: 'Europe/Chisinau', continent: 'europe' },
+  { country: '斯洛文尼亚', countryEn: 'Slovenia', capital: '卢布尔雅那', capitalEn: 'Ljubljana', tz: 'Europe/Ljubljana', continent: 'europe' },
+  { country: '波黑', countryEn: 'Bosnia and Herzegovina', capital: '萨拉热窝', capitalEn: 'Sarajevo', tz: 'Europe/Sarajevo', continent: 'europe' },
+  { country: '北马其顿', countryEn: 'North Macedonia', capital: '斯科普里', capitalEn: 'Skopje', tz: 'Europe/Skopje', continent: 'europe' },
+  { country: '阿尔巴尼亚', countryEn: 'Albania', capital: '地拉那', capitalEn: 'Tirana', tz: 'Europe/Tirane', continent: 'europe' },
+  { country: '马耳他', countryEn: 'Malta', capital: '瓦莱塔', capitalEn: 'Valletta', tz: 'Europe/Malta', continent: 'europe' },
+  { country: '卢森堡', countryEn: 'Luxembourg', capital: '卢森堡市', capitalEn: 'Luxembourg', tz: 'Europe/Luxembourg', continent: 'europe' },
+  { country: '摩纳哥', countryEn: 'Monaco', capital: '摩纳哥', capitalEn: 'Monaco', tz: 'Europe/Monaco', continent: 'europe' },
+  { country: '安道尔', countryEn: 'Andorra', capital: '安道尔城', capitalEn: 'Andorra la Vella', tz: 'Europe/Andorra', continent: 'europe' },
+  { country: '列支敦士登', countryEn: 'Liechtenstein', capital: '瓦杜兹', capitalEn: 'Vaduz', tz: 'Europe/Vaduz', continent: 'europe' },
+  { country: '圣马力诺', countryEn: 'San Marino', capital: '圣马力诺', capitalEn: 'San Marino', tz: 'Europe/San_Marino', continent: 'europe' },
+  { country: '梵蒂冈', countryEn: 'Vatican City', capital: '梵蒂冈城', capitalEn: 'Vatican City', tz: 'Europe/Vatican', continent: 'europe' },
+  { country: '俄罗斯', countryEn: 'Russia', capital: '莫斯科', capitalEn: 'Moscow', tz: 'Europe/Moscow', continent: 'europe' },
+
+  // ── North America / 北美 ──
+  { country: '美国', countryEn: 'United States', capital: '华盛顿', capitalEn: 'Washington D.C.', tz: 'America/New_York', continent: 'na' },
+  { country: '加拿大', countryEn: 'Canada', capital: '渥太华', capitalEn: 'Ottawa', tz: 'America/Toronto', continent: 'na' },
+  { country: '墨西哥', countryEn: 'Mexico', capital: '墨西哥城', capitalEn: 'Mexico City', tz: 'America/Mexico_City', continent: 'na' },
+  { country: '危地马拉', countryEn: 'Guatemala', capital: '危地马拉城', capitalEn: 'Guatemala City', tz: 'America/Guatemala', continent: 'na' },
+  { country: '伯利兹', countryEn: 'Belize', capital: '贝尔莫潘', capitalEn: 'Belmopan', tz: 'America/Belize', continent: 'na' },
+  { country: '萨尔瓦多', countryEn: 'El Salvador', capital: '圣萨尔瓦多', capitalEn: 'San Salvador', tz: 'America/El_Salvador', continent: 'na' },
+  { country: '洪都拉斯', countryEn: 'Honduras', capital: '特古西加尔巴', capitalEn: 'Tegucigalpa', tz: 'America/Tegucigalpa', continent: 'na' },
+  { country: '尼加拉瓜', countryEn: 'Nicaragua', capital: '马那瓜', capitalEn: 'Managua', tz: 'America/Managua', continent: 'na' },
+  { country: '哥斯达黎加', countryEn: 'Costa Rica', capital: '圣何塞', capitalEn: 'San José', tz: 'America/Costa_Rica', continent: 'na' },
+  { country: '巴拿马', countryEn: 'Panama', capital: '巴拿马城', capitalEn: 'Panama City', tz: 'America/Panama', continent: 'na' },
+  { country: '古巴', countryEn: 'Cuba', capital: '哈瓦那', capitalEn: 'Havana', tz: 'America/Havana', continent: 'na' },
+  { country: '牙买加', countryEn: 'Jamaica', capital: '金斯敦', capitalEn: 'Kingston', tz: 'America/Jamaica', continent: 'na' },
+  { country: '海地', countryEn: 'Haiti', capital: '太子港', capitalEn: 'Port-au-Prince', tz: 'America/Port-au-Prince', continent: 'na' },
+  { country: '多米尼加', countryEn: 'Dominican Republic', capital: '圣多明各', capitalEn: 'Santo Domingo', tz: 'America/Santo_Domingo', continent: 'na' },
+  { country: '巴哈马', countryEn: 'Bahamas', capital: '拿骚', capitalEn: 'Nassau', tz: 'America/Nassau', continent: 'na' },
+  { country: '巴巴多斯', countryEn: 'Barbados', capital: '布里奇顿', capitalEn: 'Bridgetown', tz: 'America/Barbados', continent: 'na' },
+  { country: '特立尼达和多巴哥', countryEn: 'Trinidad and Tobago', capital: '西班牙港', capitalEn: 'Port of Spain', tz: 'America/Port_of_Spain', continent: 'na' },
+  { country: '格林纳达', countryEn: 'Grenada', capital: '圣乔治', capitalEn: "St. George's", tz: 'America/Grenada', continent: 'na' },
+
+  // ── South America / 南美 ──
+  { country: '巴西', countryEn: 'Brazil', capital: '巴西利亚', capitalEn: 'Brasília', tz: 'America/Sao_Paulo', continent: 'sa' },
+  { country: '阿根廷', countryEn: 'Argentina', capital: '布宜诺斯艾利斯', capitalEn: 'Buenos Aires', tz: 'America/Argentina/Buenos_Aires', continent: 'sa' },
+  { country: '智利', countryEn: 'Chile', capital: '圣地亚哥', capitalEn: 'Santiago', tz: 'America/Santiago', continent: 'sa' },
+  { country: '秘鲁', countryEn: 'Peru', capital: '利马', capitalEn: 'Lima', tz: 'America/Lima', continent: 'sa' },
+  { country: '哥伦比亚', countryEn: 'Colombia', capital: '波哥大', capitalEn: 'Bogotá', tz: 'America/Bogota', continent: 'sa' },
+  { country: '委内瑞拉', countryEn: 'Venezuela', capital: '加拉加斯', capitalEn: 'Caracas', tz: 'America/Caracas', continent: 'sa' },
+  { country: '厄瓜多尔', countryEn: 'Ecuador', capital: '基多', capitalEn: 'Quito', tz: 'America/Guayaquil', continent: 'sa' },
+  { country: '玻利维亚', countryEn: 'Bolivia', capital: '苏克雷', capitalEn: 'Sucre', tz: 'America/La_Paz', continent: 'sa' },
+  { country: '巴拉圭', countryEn: 'Paraguay', capital: '亚松森', capitalEn: 'Asunción', tz: 'America/Asuncion', continent: 'sa' },
+  { country: '乌拉圭', countryEn: 'Uruguay', capital: '蒙得维的亚', capitalEn: 'Montevideo', tz: 'America/Montevideo', continent: 'sa' },
+  { country: '圭亚那', countryEn: 'Guyana', capital: '乔治敦', capitalEn: 'Georgetown', tz: 'America/Guyana', continent: 'sa' },
+  { country: '苏里南', countryEn: 'Suriname', capital: '帕拉马里博', capitalEn: 'Paramaribo', tz: 'America/Paramaribo', continent: 'sa' },
+
+  // ── Africa / 非洲 ──
+  { country: '埃及', countryEn: 'Egypt', capital: '开罗', capitalEn: 'Cairo', tz: 'Africa/Cairo', continent: 'africa' },
+  { country: '南非', countryEn: 'South Africa', capital: '比勒陀利亚', capitalEn: 'Pretoria', tz: 'Africa/Johannesburg', continent: 'africa' },
+  { country: '尼日利亚', countryEn: 'Nigeria', capital: '阿布贾', capitalEn: 'Abuja', tz: 'Africa/Lagos', continent: 'africa' },
+  { country: '肯尼亚', countryEn: 'Kenya', capital: '内罗毕', capitalEn: 'Nairobi', tz: 'Africa/Nairobi', continent: 'africa' },
+  { country: '埃塞俄比亚', countryEn: 'Ethiopia', capital: '亚的斯亚贝巴', capitalEn: 'Addis Ababa', tz: 'Africa/Addis_Ababa', continent: 'africa' },
+  { country: '坦桑尼亚', countryEn: 'Tanzania', capital: '多多马', capitalEn: 'Dodoma', tz: 'Africa/Dar_es_Salaam', continent: 'africa' },
+  { country: '加纳', countryEn: 'Ghana', capital: '阿克拉', capitalEn: 'Accra', tz: 'Africa/Accra', continent: 'africa' },
+  { country: '利比里亚', countryEn: 'Liberia', capital: '蒙罗维亚', capitalEn: 'Monrovia', tz: 'Africa/Monrovia', continent: 'africa' },
+  { country: '摩洛哥', countryEn: 'Morocco', capital: '拉巴特', capitalEn: 'Rabat', tz: 'Africa/Casablanca', continent: 'africa' },
+  { country: '阿尔及利亚', countryEn: 'Algeria', capital: '阿尔及尔', capitalEn: 'Algiers', tz: 'Africa/Algiers', continent: 'africa' },
+  { country: '突尼斯', countryEn: 'Tunisia', capital: '突尼斯市', capitalEn: 'Tunis', tz: 'Africa/Tunis', continent: 'africa' },
+  { country: '利比亚', countryEn: 'Libya', capital: '的黎波里', capitalEn: 'Tripoli', tz: 'Africa/Tripoli', continent: 'africa' },
+  { country: '苏丹', countryEn: 'Sudan', capital: '喀土穆', capitalEn: 'Khartoum', tz: 'Africa/Khartoum', continent: 'africa' },
+  { country: '南苏丹', countryEn: 'South Sudan', capital: '朱巴', capitalEn: 'Juba', tz: 'Africa/Juba', continent: 'africa' },
+  { country: '索马里', countryEn: 'Somalia', capital: '摩加迪沙', capitalEn: 'Mogadishu', tz: 'Africa/Mogadishu', continent: 'africa' },
+  { country: '乌干达', countryEn: 'Uganda', capital: '坎帕拉', capitalEn: 'Kampala', tz: 'Africa/Kampala', continent: 'africa' },
+  { country: '卢旺达', countryEn: 'Rwanda', capital: '基加利', capitalEn: 'Kigali', tz: 'Africa/Kigali', continent: 'africa' },
+  { country: '刚果（金）', countryEn: 'DR Congo', capital: '金沙萨', capitalEn: 'Kinshasa', tz: 'Africa/Kinshasa', continent: 'africa' },
+  { country: '刚果（布）', countryEn: 'Congo', capital: '布拉柴维尔', capitalEn: 'Brazzaville', tz: 'Africa/Brazzaville', continent: 'africa' },
+  { country: '安哥拉', countryEn: 'Angola', capital: '罗安达', capitalEn: 'Luanda', tz: 'Africa/Luanda', continent: 'africa' },
+  { country: '赞比亚', countryEn: 'Zambia', capital: '卢萨卡', capitalEn: 'Lusaka', tz: 'Africa/Lusaka', continent: 'africa' },
+  { country: '津巴布韦', countryEn: 'Zimbabwe', capital: '哈拉雷', capitalEn: 'Harare', tz: 'Africa/Harare', continent: 'africa' },
+  { country: '莫桑比克', countryEn: 'Mozambique', capital: '马普托', capitalEn: 'Maputo', tz: 'Africa/Maputo', continent: 'africa' },
+  { country: '马达加斯加', countryEn: 'Madagascar', capital: '塔那那利佛', capitalEn: 'Antananarivo', tz: 'Indian/Antananarivo', continent: 'africa' },
+  { country: '毛里求斯', countryEn: 'Mauritius', capital: '路易港', capitalEn: 'Port Louis', tz: 'Indian/Mauritius', continent: 'africa' },
+  { country: '纳米比亚', countryEn: 'Namibia', capital: '温得和克', capitalEn: 'Windhoek', tz: 'Africa/Windhoek', continent: 'africa' },
+  { country: '博茨瓦纳', countryEn: 'Botswana', capital: '哈博罗内', capitalEn: 'Gaborone', tz: 'Africa/Gaborone', continent: 'africa' },
+  { country: '塞内加尔', countryEn: 'Senegal', capital: '达喀尔', capitalEn: 'Dakar', tz: 'Africa/Dakar', continent: 'africa' },
+  { country: '科特迪瓦', countryEn: "Côte d'Ivoire", capital: '亚穆苏克罗', capitalEn: 'Yamoussoukro', tz: 'Africa/Abidjan', continent: 'africa' },
+  { country: '马里', countryEn: 'Mali', capital: '巴马科', capitalEn: 'Bamako', tz: 'Africa/Bamako', continent: 'africa' },
+  { country: '布基纳法索', countryEn: 'Burkina Faso', capital: '瓦加杜古', capitalEn: 'Ouagadougou', tz: 'Africa/Ouagadougou', continent: 'africa' },
+  { country: '尼日尔', countryEn: 'Niger', capital: '尼亚美', capitalEn: 'Niamey', tz: 'Africa/Niamey', continent: 'africa' },
+  { country: '乍得', countryEn: 'Chad', capital: '恩贾梅纳', capitalEn: "N'Djamena", tz: 'Africa/Ndjamena', continent: 'africa' },
+  { country: '喀麦隆', countryEn: 'Cameroon', capital: '雅温得', capitalEn: 'Yaoundé', tz: 'Africa/Douala', continent: 'africa' },
+  { country: '加蓬', countryEn: 'Gabon', capital: '利伯维尔', capitalEn: 'Libreville', tz: 'Africa/Libreville', continent: 'africa' },
+  { country: '马拉维', countryEn: 'Malawi', capital: '利隆圭', capitalEn: 'Lilongwe', tz: 'Africa/Blantyre', continent: 'africa' },
+
+  // ── Oceania / 大洋洲 ──
+  { country: '澳大利亚', countryEn: 'Australia', capital: '堪培拉', capitalEn: 'Canberra', tz: 'Australia/Sydney', continent: 'oceania' },
+  { country: '新西兰', countryEn: 'New Zealand', capital: '惠灵顿', capitalEn: 'Wellington', tz: 'Pacific/Auckland', continent: 'oceania' },
+  { country: '斐济', countryEn: 'Fiji', capital: '苏瓦', capitalEn: 'Suva', tz: 'Pacific/Fiji', continent: 'oceania' },
+  { country: '巴布亚新几内亚', countryEn: 'Papua New Guinea', capital: '莫尔兹比港', capitalEn: 'Port Moresby', tz: 'Pacific/Port_Moresby', continent: 'oceania' },
+  { country: '所罗门群岛', countryEn: 'Solomon Islands', capital: '霍尼亚拉', capitalEn: 'Honiara', tz: 'Pacific/Guadalcanal', continent: 'oceania' },
+  { country: '瓦努阿图', countryEn: 'Vanuatu', capital: '维拉港', capitalEn: 'Port Vila', tz: 'Pacific/Efate', continent: 'oceania' },
+  { country: '萨摩亚', countryEn: 'Samoa', capital: '阿皮亚', capitalEn: 'Apia', tz: 'Pacific/Apia', continent: 'oceania' },
+  { country: '汤加', countryEn: 'Tonga', capital: '努库阿洛法', capitalEn: "Nukuʻalofa", tz: 'Pacific/Tongatapu', continent: 'oceania' },
+  { country: '基里巴斯', countryEn: 'Kiribati', capital: '塔拉瓦', capitalEn: 'Tarawa', tz: 'Pacific/Tarawa', continent: 'oceania' },
+  { country: '密克罗尼西亚', countryEn: 'Micronesia', capital: '帕利基尔', capitalEn: 'Palikir', tz: 'Pacific/Pohnpei', continent: 'oceania' },
+  { country: '马绍尔群岛', countryEn: 'Marshall Islands', capital: '马朱罗', capitalEn: 'Majuro', tz: 'Pacific/Majuro', continent: 'oceania' },
+  { country: '帕劳', countryEn: 'Palau', capital: '恩吉鲁穆德', capitalEn: 'Ngerulmud', tz: 'Pacific/Palau', continent: 'oceania' },
+];
+
+// ============================================================
+// HELPERS
+// ============================================================
+function getTZLabel(tz) {
+  try {
+    const now = new Date();
+    const f = new Intl.DateTimeFormat('zh-CN', { timeZone: tz, timeZoneName: 'longOffset' });
+    const p = f.formatToParts(now);
+    const v = p.find(x => x.type === 'timeZoneName')?.value || '';
+    const m = v.match(/GMT([+-]\d{2}):(\d{2})/);
+    if (m) {
+      const h = parseInt(m[1]); const min = parseInt(m[2]);
+      return `UTC${h < 0 ? '' : '+'}${h}${min ? ':'+String(min).padStart(2,'0') : ''}`;
+    }
+    return '';
+  } catch { return ''; }
+}
+
+function getTimeIn(tz) {
+  const f = new Intl.DateTimeFormat('zh-CN', { timeZone: tz, hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false });
+  return f.format(new Date());
+}
+
+function getDateIn(tz) {
+  const f = new Intl.DateTimeFormat('zh-CN', { timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit', weekday:'short' });
+  return f.format(new Date());
+}
+
+function getHourMinute(tz) {
+  const f = new Intl.DateTimeFormat('zh-CN', { timeZone: tz, hour:'2-digit', minute:'2-digit', hour12: false });
+  const s = f.format(new Date());
+  const [h, m] = s.split(':').map(Number);
+  return { h, m };
+}
+
+function getWeekday(tz) {
+  const f = new Intl.DateTimeFormat('zh-CN', { timeZone: tz, weekday: 'long' });
+  return f.format(new Date());
+}
+
+function getWorkStatus(tz) {
+  const { h, m } = getHourMinute(tz);
+  const wd = getWeekday(tz);
+  const isSunday = wd === '星期日' || wd === 'Sunday';
+  if (isSunday) return 'closed';
+  const minutes = h * 60 + m;
+  if (minutes >= 9*60 && minutes < 12*60) return 'open';
+  if (minutes >= 12*60 && minutes < 14*60) return 'lunch';
+  if (minutes >= 14*60 && minutes < 18*60) return 'open';
+  return 'closed';
+}
+
+function getDiffLabel(tz) {
+  try {
+    const local = new Date();
+    const localOff = -local.getTimezoneOffset();
+    const f = new Intl.DateTimeFormat('zh-CN', { timeZone: tz, timeZoneName: 'longOffset' });
+    const p = f.formatToParts(local);
+    const v = p.find(x => x.type === 'timeZoneName')?.value || '';
+    const m = v.match(/GMT([+-]\d{1,2})(?::?(\d{2}))?/);
+    if (!m) return '';
+    const targetOff = parseInt(m[1]) * 60 + (parseInt(m[2]) || 0);
+    const diff = targetOff - localOff;
+    if (diff === 0) return 'Same';
+    const abs = Math.abs(diff);
+    const hh = Math.floor(abs / 60);
+    const mm = abs % 60;
+    const s = `${hh}h${String(mm).padStart(2, '0')}`;
+    return diff > 0 ? `+${s}` : `-${s}`;
+  } catch { return ''; }
+}
+
+function getPeriod(hour) {
+  if (hour >= 6 && hour < 18) return 'day';
+  if ((hour >= 5 && hour < 6) || (hour >= 18 && hour < 20)) return 'twilight';
+  return 'night';
+}
+
+function periodEmoji(p) {
+  return p === 'day' ? '☀️' : p === 'twilight' ? '🌆' : '🌙';
+}
+
+function workStatusMeta(s) {
+  if (s === 'open')  return { labelCN: '工作中', labelEN: 'Working', cls: 'open', dot: '●' };
+  if (s === 'lunch') return { labelCN: '午休中', labelEN: 'Lunch',   cls: 'lunch', dot: '●' };
+  return { labelCN: '已下班', labelEN: 'Off', cls: 'closed', dot: '○' };
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+const grid          = document.getElementById('cityGrid');
+const searchInput   = document.getElementById('searchInput');
+const filterBtns    = document.querySelectorAll('.filter-btn');
+const localTimeEl   = document.getElementById('localTime');
+const localDateEl   = document.getElementById('localDate');
+const statWorking   = document.getElementById('statWorking');
+const statLunch     = document.getElementById('statLunch');
+const statOff       = document.getElementById('statOff');
+const statTotal     = document.getElementById('statTotal');
+
+let currentFilter = 'all';
+let currentSearch = '';
+let favorites = new Set(JSON.parse(localStorage.getItem('worldClockFavorites') || '[]'));
+
+function saveFavorites() {
+  localStorage.setItem('worldClockFavorites', JSON.stringify([...favorites].sort()));
+}
+
+function toggleFavorite(tz) {
+  if (favorites.has(tz)) favorites.delete(tz);
+  else favorites.add(tz);
+  saveFavorites();
+  render();
+}
+
+// Number animation for stats
+function animateNumber(el, target) {
+  const current = parseInt(el.textContent) || 0;
+  if (current === target) return;
+  const diff = target - current;
+  const duration = 400;
+  const start = performance.now();
+  function step(now) {
+    const p = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = Math.round(current + diff * eased);
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function render() {
+  const search = currentSearch.toLowerCase().trim();
+
+  let wCount = 0, lCount = 0, oCount = 0;
+
+  const sortedCapitals = [...capitals].sort((a, b) => {
+    const af = favorites.has(a.tz) ? 0 : 1;
+    const bf = favorites.has(b.tz) ? 0 : 1;
+    if (af !== bf) return af - bf;
+    return a.countryEn.localeCompare(b.countryEn);
+  });
+
+  const cards = sortedCapitals.map(city => {
+    const isFavorite = favorites.has(city.tz);
+    const match = (
+      city.country.includes(search) ||
+      city.capital.includes(search) ||
+      city.countryEn.toLowerCase().includes(search) ||
+      city.capitalEn.toLowerCase().includes(search)
+    );
+    const filterMatch = currentFilter === 'all'
+      || (currentFilter === 'favorites' && isFavorite)
+      || city.continent === currentFilter;
+    const visible = match && filterMatch;
+
+    let time, date, ws, period, emoji, offset, diff, meta;
+    try {
+      time   = getTimeIn(city.tz);
+      date   = getDateIn(city.tz);
+      ws     = getWorkStatus(city.tz);
+      meta   = workStatusMeta(ws);
+      const { h } = getHourMinute(city.tz);
+      period = getPeriod(h);
+      emoji  = periodEmoji(period);
+      offset = getTZLabel(city.tz);
+      diff   = getDiffLabel(city.tz);
+
+      if (visible) {
+        if (ws === 'open') wCount++;
+        else if (ws === 'lunch') lCount++;
+        else oCount++;
+      }
+    } catch {
+      return { city, visible, html: `<div class="city-card" style="opacity:0.5"><div class="city-name">${city.capital} <span class="en">${city.capitalEn}</span></div><div class="country-name">${city.country} <span class="en">${city.countryEn}</span></div></div>` };
+    }
+
+    const highlight  = ws === 'open' ? ' highlight' : '';
+
+    const html = `<div class="city-card${highlight}" data-continent="${city.continent}" data-tz="${city.tz}">
+      <div class="top-bar ${period}"></div>
+      <div class="tz-label">${offset}</div>
+      <button class="favorite-btn${isFavorite ? ' active' : ''}" data-tz="${city.tz}" aria-label="Toggle favorite">${isFavorite ? '★' : '☆'}</button>
+      <span class="work-badge ${meta.cls}">${meta.dot} ${meta.labelEN}</span>
+      <div class="city-info">
+        <div class="city-name">${emoji} ${city.capital} <span class="en">${city.capitalEn}</span></div>
+        <div class="country-name">${city.country} <span class="en">· ${city.countryEn}</span></div>
+      </div>
+      <div class="clock-time">${time}</div>
+      <div class="clock-date">${date}</div>
+      ${diff ? `<span class="diff-tag"><span class="strong">${diff}</span></span>` : ''}
+    </div>`;
+
+    return { city, visible, html };
+  });
+
+  const visibleCount = cards.filter(c => c.visible).length;
+
+  animateNumber(statWorking, wCount);
+  animateNumber(statLunch, lCount);
+  animateNumber(statOff, oCount);
+  statTotal.textContent = currentFilter === 'favorites' ? favorites.size : capitals.length;
+
+  grid.innerHTML = cards.map(c => c.visible ? c.html : '<div class="city-card hidden"></div>').join('');
+
+  grid.querySelectorAll('.favorite-btn').forEach(btn => {
+    btn.addEventListener('click', event => {
+      event.stopPropagation();
+      toggleFavorite(btn.dataset.tz);
+    });
+  });
+
+  // Re-trigger card entrance animation on filter change
+  document.querySelectorAll('.city-card:not(.hidden)').forEach((card, i) => {
+    card.style.animation = 'none';
+    card.offsetHeight; // force reflow
+    card.style.animation = `cardEnter 0.5s ease-out ${i * 0.03}s both`;
+  });
+
+  if (visibleCount === 0 && capitals.length > 0) {
+    grid.innerHTML += `<div class="empty">🔍 No results / 没有找到匹配 "<strong>${currentSearch}</strong>"</div>`;
+  }
+}
+
+// ============================================================
+// LOCAL TIME
+// ============================================================
+function updateLocalTime() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  localTimeEl.textContent = `${h}:${m}:${s}`;
+  localDateEl.textContent = now.toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  }) + ' · ' + now.toLocaleDateString('zh-CN', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+}
+
+function updateCardTimes() {
+  grid.querySelectorAll('.city-card[data-tz]').forEach(card => {
+    const tz = card.dataset.tz;
+    try {
+      const timeEl = card.querySelector('.clock-time');
+      const dateEl = card.querySelector('.clock-date');
+      const diffEl = card.querySelector('.diff-tag .strong');
+      if (timeEl) timeEl.textContent = getTimeIn(tz);
+      if (dateEl) dateEl.textContent = getDateIn(tz);
+      if (diffEl) diffEl.textContent = getDiffLabel(tz);
+    } catch {}
+  });
+}
+
+// ============================================================
+// EVENTS
+// ============================================================
+searchInput.addEventListener('input', () => {
+  currentSearch = searchInput.value;
+  render();
+});
+
+filterBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    filterBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = btn.dataset.filter;
+    render();
+  });
+});
+
+document.addEventListener('keydown', e => {
+  if ((e.key === '/' || (e.key === 'f' && (e.ctrlKey || e.metaKey))) && document.activeElement !== searchInput) {
+    if (e.key === 'f') return;
+    e.preventDefault();
+    searchInput.focus();
+  }
+  if (e.key === 'Escape') searchInput.blur();
+});
+
+// ============================================================
+// TICK
+// ============================================================
+updateLocalTime();
+render();
+setInterval(() => {
+  updateLocalTime();
+  updateCardTimes();
+}, 1000);
+
+setInterval(render, 60000);
+
+console.log(`🌍 World Business Hours loaded — ${capitals.length} countries`);
+
+// Register service worker for PWA install support
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
